@@ -1,0 +1,304 @@
+class Announcer {
+	constructor() {
+		this.eventList = {};
+	}
+	register(evt) {
+    if (evt instanceof Array) {
+    let res=[];
+    for (var p in evt) {
+      let attempt=this.register(evt[p]);
+      if (attempt) res.push(attempt);
+    }
+    return res;
+}
+let event = this.eventList[eventname];
+if (event == undefined) {
+			event = {
+				name: eventname,
+				id: "evt" + Object.keys(this.eventList).length + 1,
+				subs: {}
+			};
+			event.handler = this;
+			event.deregister = function () {
+				return this.handler.deregister(event);
+			};
+			this.eventList[eventname] = event;
+		}
+		return event;
+	}
+//end register
+subscribe(e, callb) {
+if (e instanceof Object) {
+  let keys=Object.keys(e);
+  let c=keys.length;
+  let results=[];
+  for (let i=0;i<c;i++) {
+    let evtname=keys[i];
+    let func=e[evtname];
+    let token=this.subscribe(evtname, func);
+    if (token) results.push(token);
+    }
+return results;
+}
+if (e instanceof Array) { //assumes arrauy [{name:"width",func:function () {}},...]
+  let len=e.length;
+  let array_res=[];
+  for (let i=0;i<len;i++) {
+    let rec=e[i];
+    if (rec.name==undefined) return false;
+    let token=this.subscribe(rec.name, rec.func);
+    if (token) array_res.push(token);
+  }
+return array_res;
+}
+if (e instanceof String) {
+  let event=this.eventList[e];
+  if (event===undefined) return false;
+  let subs = event.subs;
+	let subcount = Object.keys(subs).length;
+	let tokenid = "eventsub" + subcount;
+	let token = { event: event, id: tokenid, handler: this };
+	subs[tokenid] = callb;
+	token.unsubscribe = function () {
+			token.handler.unsubscribe(token);
+		};
+	token.resubscribe = function () {
+			token.handler.resubscribe(token);
+		};
+		this.eventList[eventname].subs = subs;
+		return token;
+	}
+}
+publish(eventname, ...args) {
+		const subs = this.eventList[eventname].subs;
+		if (!subs) return false;
+		Object.values(subs).forEach((sub) => sub(...args));
+	}
+
+	unsubscribe(token) {
+		let eventname = token.event;
+		let subs = this.eventList[eventname].subs;
+		if (subs == undefined) return false;
+		subs[token.id] = {}; //Delete specific subscription
+		this.eventList[eventname].subs = subs;
+	}
+	resubscribe(token) {
+		let eventname = token.event;
+		let subs = this.eventList[eventname];
+		subs[token.id] = token.func;
+	}
+}
+
+class Dims {
+		#processValue (val,prop) { //normalizes anything sent to a property into a number
+				if (val instanceof Dims) {
+					return val[prop];
+				}
+			  if (val instanceof HTMLElement) {
+					val=$(val);
+				}
+				if (val instanceof $) {
+					val=this.clone(val)[prop];
+				}
+			if (!val instanceof Number) return false;
+				val=Math.floor(val);
+				return val;
+		}
+	#handler
+	#setupHandler() {
+		let handy=this.#handler=new Announcer();
+		let props="x,xmid,xmax,y,ymid,ymax,width,legnth".split(",");
+		let c=props.length;
+		for (var i=0;i<c;i++) {
+			handy.register(props[i]);
+		}
+		
+	}
+	#addsynonyms () {
+		let syns={x:"l,left,lft,xmin".split(","),xmid:"cx,center".split(","), xmax:"right,r,rgt".split(","),y:"t,top,ymin".split(","), ymid:"cy,middle,mid".split(","),ymax:"b,btm,bottom".split(",")}
+		let props=Object.keys(syns);
+		let c=props.length;
+		for (var i=0;i<c;i++) {
+			let prop=props[i];
+			let synlist=syns[prop];
+			let t=synlist.length;
+			for (let j=0;j<t;j++) {
+				let synitem=synlist[j];
+				console.log("adding property "+synitem+" to "+prop);
+				Object.defineProperty(this,synitem, {get:function () {
+					return this[prop];
+				}, set:function (val) {
+					this[prop]=val;
+				}})
+			}
+		}
+	}
+		constructor (targ) {
+			if (!targ) return false;
+			if (targ instanceof HTMLElement) {
+				targ=$(targ);
+			}
+			if (!targ instanceof $) {
+				return false;
+			}
+			if (targ.data("dims")!=undefined) return targ.data("dims");
+	this.target=targ;
+	this.target.data("dims",this);
+			this.#setupHandler();
+			this.#addsynonyms();
+	}
+		clone (targ) {
+			if (targ instanceof HTMLElement) {
+				targ=$(targ);
+			}
+			if (!targ instanceof $) return false;
+			return new Dims(targ);
+			
+		}
+		get x () {
+			return this.target.offset().left;
+		}
+		set x (val) {
+				val=this.#processValue(val,"x");
+			this.target.offset({left:val});
+			this.#handler.publish("x",this.x);
+						}
+		get xmid () {
+			return this.target.offset().left+0.5*this.target.width();
+		}
+		set xmid (val) {
+			val=this.#processValue(val, "xmid");
+			if (val) {
+				val-=0.5*this.target.width();
+				this.target.xmin=val;
+				this.#handler.publish("xmid",this.xmid);
+			}
+			
+		}
+		get xmax () {
+			return this.x+this.target.width();
+		}
+		set xmax(val) {
+			val=this.#processValue(val, "xmax");
+			if (val) {
+				val-=this.target.width();
+				this.x=val;
+				this.#handler.publish("xmax",this.xmax);
+			}
+		}
+		get y () {
+			return this.target.offset().top;
+		}
+		set y (val) {
+			val=this.#processValue(val, "y");
+			if (val) {
+				this.y=val;
+				this.#handler.publish(this.y);
+			}
+		}
+		get ymid () {
+			return this.y+0.5*this.target.height();
+		}
+		set ymid(val) {
+			val=this.#processValue(val, "ymid");
+			if (val) {
+				this.y=val-0.5*this.target.height();
+				this.#handler.publish("ymid",this.ymid)
+			}
+		}
+		get ymax () {
+			return this.y+this.target.height();
+		}
+		set ymax (val) {
+			val=this.#processValue(val,"ymax");
+			if (val) {
+				this.y=val-this.target.height();
+				this.#handler.publish("ymax", this.y);
+			}
+		}
+		get width () {
+			return this.target.width();
+		}
+		set width(val) {
+			val=this.#processValue(val);
+			if (val) {
+				this.target.width(val);
+				this.#handler.publish("width",this.width)
+			}
+		}
+		get height() {
+			return this.target.height();
+		}
+		set height(val) {
+			val=this.#processValue(val);
+			if (val) {
+				this.target.height(val);
+				this.#handler.publish("height",this.height)
+			}
+		}
+	watch (prop, func) {
+		this.#handler.subscribe(prop, func);
+		
+	}
+	toString (propsList) {
+		propsList=propsList||Object.keys(this);
+		let c=propsList.length;
+		let str="";
+		for (let i=0;i<c;i++) {
+			str+="\n"+propsList[i]+": "+this[propsList[i]];
+		}
+		return str;
+	}
+		}
+
+	$.dims=function (lst) {
+		if (!lst) return $();
+		if (lst.length>1)
+			return lst.map(function() {
+				let itm=$(this);
+				return $.dims(itm);
+			}).get();
+	if (lst.lngth<1) return $();
+			let d=new Dims(lst);
+		return d;
+	}
+	Object.defineProperty($.fn,"dims",{
+		get:function () {
+			let el=this;
+			if (el.length==0) return;
+			if (el.length>1) {
+				return el.map(function() {
+					let itm=$(this);
+					return new Dims(itm);
+				}).get();
+			}
+			return new Dims(el);
+		}, set:function (val) {
+			let el=this;
+			if (el.length<1) return;
+			if (el.length>2) {
+				return el.each(function () {
+					let itm=$(this);
+					let d=new Dims(itm);
+					let keys=Object.keys(d);
+					let c=keys.length;
+					for (var i=0;i<keys.legth;i++) {
+						let prop=keys[i];
+						if (val[prop]!==undefined) {
+							d[prop]=val[prop]
+						}
+					}
+				}).get();
+			}
+			let d=new Dims(ek);
+					let keys=Object.keys(d);
+					let c=keys.length;
+					for (var i=0;i<keys.legth;i++) {
+						let prop=keys[i];
+						if (val[prop]!==undefined) {
+							d[prop]=val[prop]
+						}
+		}
+		}
+	});
+	
